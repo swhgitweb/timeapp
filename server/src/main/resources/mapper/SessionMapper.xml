@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.focus.mapper.SessionMapper">
+
+  <resultMap id="BaseMap" type="com.focus.entity.FocusSession">
+    <id column="id" property="id"/>
+    <result column="client_id" property="clientId"/>
+    <result column="task_title" property="taskTitle"/>
+    <result column="note" property="note"/>
+    <result column="mode" property="mode"/>
+    <result column="planned_sec" property="plannedSec"/>
+    <result column="started_at" property="startedAt"/>
+    <result column="ended_at" property="endedAt"/>
+    <result column="duration_sec" property="durationSec"/>
+    <result column="paused_sec" property="pausedSec"/>
+    <result column="status" property="status"/>
+    <result column="session_date" property="sessionDate"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="deleted_at" property="deletedAt"/>
+  </resultMap>
+
+  <insert id="insert" parameterType="com.focus.entity.FocusSession"
+          useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO focus_session
+      (client_id, task_title, note, mode, planned_sec,
+       started_at, ended_at, duration_sec, paused_sec, status, session_date)
+    VALUES
+      (#{clientId}, #{taskTitle}, #{note}, #{mode}, #{plannedSec},
+       #{startedAt}, #{endedAt}, #{durationSec}, #{pausedSec}, #{status}, #{sessionDate})
+  </insert>
+
+  <select id="selectByClientId" resultMap="BaseMap">
+    SELECT *
+    FROM focus_session
+    WHERE client_id = #{clientId}
+    LIMIT 1
+  </select>
+
+  <select id="selectList" resultMap="BaseMap">
+    SELECT *
+    FROM focus_session
+    <where>
+      deleted_at IS NULL
+      <if test="from != null">
+        AND session_date &gt;= #{from}
+      </if>
+      <if test="to != null">
+        AND session_date &lt;= #{to}
+      </if>
+    </where>
+    ORDER BY started_at DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectTaskTitles" resultType="java.lang.String">
+    SELECT task_title
+    FROM focus_session
+    WHERE deleted_at IS NULL
+      AND task_title &lt;&gt; ''
+    GROUP BY task_title
+    ORDER BY MAX(started_at) DESC
+    LIMIT #{limit}
+  </select>
+
+  <update id="softDelete">
+    UPDATE focus_session
+    SET deleted_at = NOW()
+    WHERE id = #{id}
+      AND deleted_at IS NULL
+  </update>
+
+  <select id="summary" resultType="com.focus.vo.SummaryVO">
+    SELECT
+      COALESCE(SUM(duration_sec), 0) AS totalSec,
+      COALESCE(SUM(CASE WHEN mode = 'countdown' AND status = 'completed' THEN 1 ELSE 0 END), 0) AS pomodoroCount,
+      COALESCE(SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END), 0) AS abortedCount,
+      COUNT(DISTINCT session_date) AS activeDays
+    FROM focus_session
+    WHERE deleted_at IS NULL
+      AND session_date &gt;= #{from}
+      AND session_date &lt;= #{to}
+  </select>
+
+  <select id="daily" resultType="com.focus.vo.DailyVO">
+    SELECT
+      session_date AS `date`,
+      COALESCE(SUM(duration_sec), 0) AS totalSec,
+      COALESCE(SUM(CASE WHEN mode = 'countdown' AND status = 'completed' THEN 1 ELSE 0 END), 0) AS pomodoroCount
+    FROM focus_session
+    WHERE deleted_at IS NULL
+      AND session_date &gt;= #{from}
+      AND session_date &lt;= #{to}
+    GROUP BY session_date
+    ORDER BY session_date ASC
+  </select>
+
+</mapper>
