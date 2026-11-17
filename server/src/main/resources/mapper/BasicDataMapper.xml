@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.focus.mapper.BasicDataMapper">
+  <resultMap id="ListMap" type="com.focus.entity.TaskList">
+    <id column="id" property="id"/>
+    <result column="user_id" property="userId"/>
+    <result column="sort_order" property="sortOrder"/>
+  </resultMap>
+  <resultMap id="TaskMap" type="com.focus.entity.TaskItem">
+    <id column="id" property="id"/>
+    <result column="user_id" property="userId"/>
+    <result column="list_id" property="listId"/>
+  </resultMap>
+  <resultMap id="HabitMap" type="com.focus.entity.Habit">
+    <id column="id" property="id"/>
+    <result column="user_id" property="userId"/>
+  </resultMap>
+
+  <select id="selectLists" resultMap="ListMap">
+    SELECT * FROM task_list WHERE user_id = #{userId} AND archived = 0 ORDER BY sort_order, id
+  </select>
+  <select id="selectListById" resultMap="ListMap">
+    SELECT * FROM task_list WHERE user_id = #{userId} AND id = #{id} LIMIT 1
+  </select>
+  <insert id="insertList" parameterType="com.focus.entity.TaskList" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO task_list (user_id, name, color, sort_order, archived)
+    VALUES (#{userId}, #{name}, #{color}, #{sortOrder}, #{archived})
+  </insert>
+  <update id="updateList" parameterType="com.focus.entity.TaskList">
+    UPDATE task_list SET name = #{name}, color = #{color}, sort_order = #{sortOrder}, archived = #{archived}
+    WHERE user_id = #{userId} AND id = #{id}
+  </update>
+  <update id="archiveList">
+    UPDATE task_list SET archived = 1 WHERE user_id = #{userId} AND id = #{id} AND archived = 0
+  </update>
+
+  <select id="selectTasks" resultMap="TaskMap">
+    SELECT * FROM task WHERE user_id = #{userId} AND deleted_at IS NULL
+    ORDER BY completed, id DESC LIMIT 500
+  </select>
+  <select id="selectTaskById" resultMap="TaskMap">
+    SELECT * FROM task WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL LIMIT 1
+  </select>
+  <insert id="insertTask" parameterType="com.focus.entity.TaskItem" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO task (user_id, list_id, title, note, completed, completed_at)
+    VALUES (#{userId}, #{listId}, #{title}, #{note}, #{completed},
+      IF(#{completed}, UTC_TIMESTAMP(6), NULL))
+  </insert>
+  <update id="updateTask" parameterType="com.focus.entity.TaskItem">
+    UPDATE task SET list_id = #{listId}, title = #{title}, note = #{note}, completed = #{completed},
+      completed_at = IF(#{completed}, COALESCE(completed_at, UTC_TIMESTAMP(6)), NULL), version = version + 1
+    WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL AND version = #{version}
+  </update>
+  <update id="softDeleteTask">
+    UPDATE task SET deleted_at = UTC_TIMESTAMP(6), version = version + 1
+    WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL
+  </update>
+  <update id="completeTask">
+    UPDATE task SET completed = 1, completed_at = COALESCE(completed_at, UTC_TIMESTAMP(6)), version = version + 1
+    WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL
+  </update>
+  <update id="moveTaskList">
+    UPDATE task SET list_id = #{listId}, version = version + 1
+    WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL
+  </update>
+
+  <select id="selectHabits" resultMap="HabitMap">
+    SELECT * FROM habit WHERE user_id = #{userId} AND archived = 0 ORDER BY id
+  </select>
+  <select id="selectHabitById" resultMap="HabitMap">
+    SELECT * FROM habit WHERE user_id = #{userId} AND id = #{id} LIMIT 1
+  </select>
+  <insert id="insertHabit" parameterType="com.focus.entity.Habit" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO habit (user_id, name, color, archived) VALUES (#{userId}, #{name}, #{color}, #{archived})
+  </insert>
+  <update id="updateHabit" parameterType="com.focus.entity.Habit">
+    UPDATE habit SET name = #{name}, color = #{color}, archived = #{archived}
+    WHERE user_id = #{userId} AND id = #{id}
+  </update>
+  <update id="archiveHabit">
+    UPDATE habit SET archived = 1 WHERE user_id = #{userId} AND id = #{id} AND archived = 0
+  </update>
+</mapper>

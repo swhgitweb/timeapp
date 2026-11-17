@@ -7,8 +7,10 @@ package com.focus.common;
 public class CommonResult<T> {
 
     public static final int CODE_OK = 0;
+    public static final int CODE_UNAUTHORIZED = 40100;
     public static final int CODE_BAD_REQUEST = 40000;
     public static final int CODE_NOT_FOUND = 40400;
+    public static final int CODE_CONFLICT = 40900;
     public static final int CODE_SERVER_ERROR = 50000;
 
     private int code;

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
+import dayjs from 'dayjs'
 import { createSession, type SessionCreatePayload, type SessionStatus } from '../api/session'
-import { fmtDateTime } from '../utils/date'
 import { playChime } from '../utils/sound'
+import { useAuthStore } from './auth'
 
 export type Phase = 'idle' | 'running' | 'paused'
 export type Mode = 'countup' | 'countdown'
@@ -11,8 +12,7 @@ export type RestoreKind =
   | 'none' // 无未结束计时
   | 'save-failed' // 有未保存成功的会话（含刷新前保存失败），弹「重试 / 放弃」
   | 'expired-saved' // 倒计时已到期，自动补记完成
-  | 'needs-decision' // 正计时未结束，弹「继续 / 结束保存 / 丢弃」
-  | 'restored' // 倒计时未到期，原样恢复
+  | 'restored' // 未结束，刷新后接着计时（手动暂停过的保持暂停）
 
 export interface SettleInfo {
   durationSec: number
@@ -22,7 +22,8 @@ export interface SettleInfo {
 }
 
 interface PersistData {
-  v: 1
+  v: 1 | 2 | 3
+  userId?: number
   phase?: Phase
   mode: Mode
   presetSec: number
@@ -30,12 +31,41 @@ interface PersistData {
   pausedAt: number | null
   pausedTotalMs: number
   taskTitle: string
+  taskId?: number | null
+  habitId?: number | null
   note: string
   clientId: string
   pending?: SessionCreatePayload
 }
 
-const STORAGE_KEY = 'focus_active_timer_v1' // R8
+const LEGACY_STORAGE_KEY = 'focus_active_timer_v1'
+const V2_STORAGE_PREFIX = 'focus_active_timer_v2_'
+const STORAGE_PREFIX = 'focus_active_timer_v3_'
+
+function currentStorageKey(userId?: number) {
+  return `${STORAGE_PREFIX}${userId ?? useAuthStore().user?.id ?? 'anonymous'}`
+}
+
+function v2StorageKey(userId: number) {
+  return `${V2_STORAGE_PREFIX}${userId}`
+}
+
+function toIsoInstant(value: string): string {
+  return (value.includes('T') ? new Date(value) : dayjs(value).toDate()).toISOString()
+}
+
+function normalizePending(payload: SessionCreatePayload): SessionCreatePayload {
+  return {
+    ...payload,
+    taskTitle: payload.taskTitle || '',
+    taskId: payload.taskId ?? null,
+    habitId: payload.habitId ?? null,
+    note: payload.note || '',
+    startedAt: toIsoInstant(payload.startedAt),
+    endedAt: toIsoInstant(payload.endedAt),
+    source: payload.source ?? 'timer',
+  }
+}
 
 export const useTimerStore = defineStore('timer', {
   state: () => ({
@@ -47,6 +77,8 @@ export const useTimerStore = defineStore('timer', {
     pausedAt: null as number | null,
     pausedTotalMs: 0,
     taskTitle: '',
+    taskId: null as number | null,
+    habitId: null as number | null,
     note: '',
     clientId: '',
     // 内部状态（不持久化）
@@ -159,14 +191,17 @@ export const useTimerStore = defineStore('timer', {
       return {
         clientId: this.clientId,
         taskTitle: this.taskTitle.trim().slice(0, 100),
-        note: this.note.trim().slice(0, 200),
+        taskId: this.taskId,
+        habitId: this.habitId,
+        note: this.note.trim().slice(0, 2000),
         mode: this.mode,
         plannedSec: this.mode === 'countdown' ? this.presetSec : null,
-        startedAt: fmtDateTime(this.startedAt),
-        endedAt: fmtDateTime(endMs),
+        startedAt: new Date(this.startedAt).toISOString(),
+        endedAt: new Date(endMs).toISOString(),
         durationSec,
         pausedSec: Math.round(this.pausedTotalMs / 1000),
         status,
+        source: 'timer',
       }
     },
 
@@ -205,12 +240,42 @@ export const useTimerStore = defineStore('timer', {
       this.resetKeepInput()
     },
 
+    /** 退出只清内存；各账号快照分别保留，重新登录后仍可恢复。 */
+    resetForLogout() {
+      this.stopTick()
+      this.phase = 'idle'
+      this.startedAt = 0
+      this.pausedAt = null
+      this.pausedTotalMs = 0
+      this.clientId = ''
+      this.taskTitle = ''
+      this.taskId = null
+      this.habitId = null
+      this.note = ''
+      this.pendingPayload = null
+      this.lastSettle = null
+      this.restoreResult = 'none'
+      this.nowMs = Date.now()
+    },
+
     // ---------- 刷新恢复（R9） ----------
 
     async restore(): Promise<RestoreKind> {
       let raw: string | null = null
+      const userId = useAuthStore().user?.id
+      if (!userId) return 'none'
+      const newKey = currentStorageKey(userId)
+      let storedKey = newKey
       try {
-        raw = localStorage.getItem(STORAGE_KEY)
+        raw = localStorage.getItem(newKey)
+        if (!raw) {
+          storedKey = v2StorageKey(userId)
+          raw = localStorage.getItem(storedKey)
+        }
+        if (!raw) {
+          storedKey = LEGACY_STORAGE_KEY
+          raw = localStorage.getItem(storedKey)
+        }
       } catch {
         return 'none'
       }
@@ -219,17 +284,25 @@ export const useTimerStore = defineStore('timer', {
       try {
         data = JSON.parse(raw)
       } catch {
+        try { localStorage.removeItem(storedKey) } catch { /* 忽略 */ }
         this.clearPersist()
         return 'none'
       }
-      if (!data || data.v !== 1 || !data.startedAt) {
+      if (!data || ![1, 2, 3].includes(data.v) || (!data.startedAt && !data.pending)) {
+        try { localStorage.removeItem(storedKey) } catch { /* 忽略 */ }
         this.clearPersist()
         return 'none'
       }
 
+      if (data.v >= 2 && data.userId !== userId) return 'none'
+
       // 上次保存失败未处理：直接进入「重试 / 放弃」
       if (data.pending) {
-        this.pendingPayload = data.pending
+        this.pendingPayload = normalizePending(data.pending)
+        this.persistPending(this.pendingPayload)
+        if (storedKey !== newKey) {
+          try { localStorage.removeItem(storedKey) } catch { /* 忽略 */ }
+        }
         this.restoreResult = 'save-failed'
         return 'save-failed'
       }
@@ -238,41 +311,46 @@ export const useTimerStore = defineStore('timer', {
       this.presetSec = data.presetSec
       this.startedAt = data.startedAt
       this.pausedTotalMs = data.pausedTotalMs
-      this.taskTitle = data.taskTitle
-      this.note = data.note
+      this.taskTitle = data.taskTitle || ''
+      this.taskId = data.taskId ?? null
+      this.habitId = this.taskId == null ? (data.habitId ?? null) : null
+      this.note = data.note || ''
       this.clientId = data.clientId
       const refMs = Date.now()
       this.nowMs = refMs
+
+      // 只有手动暂停过的，才把离开页面这段空白补进累计暂停，保持暂停时的读数
+      if (data.pausedAt != null) {
+        this.pausedTotalMs += Math.max(0, refMs - data.pausedAt)
+      }
 
       // R9：倒计时已到期 → 自动按完成补记（R6 公式，避免依赖 tick 误差）
       if (data.mode === 'countdown' && refMs - data.startedAt - data.pausedTotalMs >= data.presetSec * 1000) {
         const endedMs = data.startedAt + data.presetSec * 1000 + Math.round(data.pausedTotalMs / 1000) * 1000
         const payload: SessionCreatePayload = {
           clientId: data.clientId,
-          taskTitle: (data.taskTitle || '').trim().slice(0, 100),
-          note: (data.note || '').trim().slice(0, 200),
+          taskTitle: this.taskTitle.trim().slice(0, 100),
+          taskId: this.taskId,
+          habitId: this.habitId,
+          note: this.note.trim().slice(0, 2000),
           mode: 'countdown',
           plannedSec: data.presetSec,
-          startedAt: fmtDateTime(data.startedAt),
-          endedAt: fmtDateTime(endedMs),
+          startedAt: new Date(data.startedAt).toISOString(),
+          endedAt: new Date(endedMs).toISOString(),
           durationSec: data.presetSec,
           pausedSec: Math.round(data.pausedTotalMs / 1000),
           status: 'completed',
+          source: 'timer',
+        }
+        if (storedKey !== newKey) {
+          try { localStorage.removeItem(storedKey) } catch { /* 忽略 */ }
         }
         const r = await this.submit(payload)
         this.restoreResult = r.ok ? 'expired-saved' : 'save-failed'
         return this.restoreResult
       }
 
-      // R9：正计时未结束 → 提示「继续 / 结束保存 / 丢弃」；刷新期间记为暂停不计时长
-      if (data.mode === 'countup') {
-        this.phase = 'paused'
-        this.pausedAt = refMs
-        this.restoreResult = 'needs-decision'
-        return 'needs-decision'
-      }
-
-      // 倒计时未到期 → 原样恢复（暂停中的，刷新期间同样记为暂停）
+      // 刷新不停表：手动按过暂停的保持暂停，其余接着计时
       if (data.phase === 'paused') {
         this.phase = 'paused'
         this.pausedAt = refMs
@@ -281,21 +359,12 @@ export const useTimerStore = defineStore('timer', {
         this.pausedAt = null
         this.startTick()
       }
+      this.persist()
+      if (storedKey !== newKey) {
+        try { localStorage.removeItem(storedKey) } catch { /* 忽略 */ }
+      }
       this.restoreResult = 'restored'
       return 'restored'
-    },
-
-    /** 三选一：继续（刷新期间已记为暂停，不计时长） */
-    confirmResume() {
-      this.restoreResult = 'none'
-      this.resume()
-    },
-
-    /** 三选一：丢弃本次计时 */
-    discardRestore() {
-      this.restoreResult = 'none'
-      this.clearPersist()
-      this.resetKeepInput()
     },
 
     // ---------- tick：只触发重绘 + 归零检测 ----------
@@ -339,8 +408,11 @@ export const useTimerStore = defineStore('timer', {
 
     /** R8：只存计时必要字段 */
     persist() {
+      const userId = useAuthStore().user?.id
+      if (!userId) return
       const data: PersistData = {
-        v: 1,
+        v: 3,
+        userId,
         phase: this.phase,
         mode: this.mode,
         presetSec: this.presetSec,
@@ -348,27 +420,33 @@ export const useTimerStore = defineStore('timer', {
         pausedAt: this.pausedAt,
         pausedTotalMs: this.pausedTotalMs,
         taskTitle: this.taskTitle,
+        taskId: this.taskId,
+        habitId: this.habitId,
         note: this.note,
         clientId: this.clientId,
       }
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+        localStorage.setItem(currentStorageKey(userId), JSON.stringify(data))
       } catch {
         // 存储不可用时忽略，仅影响刷新恢复
       }
     },
 
     persistPending(payload: SessionCreatePayload) {
+      const userId = useAuthStore().user?.id
+      if (!userId) return
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, pending: payload }))
+        localStorage.setItem(currentStorageKey(userId), JSON.stringify({ v: 3, userId, pending: payload }))
       } catch {
         // 忽略
       }
     },
 
     clearPersist() {
+      const userId = useAuthStore().user?.id
       try {
-        localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(currentStorageKey())
+        if (userId) localStorage.removeItem(v2StorageKey(userId))
       } catch {
         // 忽略
       }

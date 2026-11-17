@@ -4,6 +4,7 @@ import com.focus.common.CommonResult;
 import com.focus.service.SessionService;
 import com.focus.vo.DailyVO;
 import com.focus.vo.SummaryVO;
+import com.focus.vo.TaskStatVO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,5 +38,20 @@ public class StatsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return CommonResult.ok(sessionService.daily(from, to));
+    }
+
+    /** 年度按月趋势，缺失月份补零。 */
+    @GetMapping("/yearly")
+    public CommonResult<List<DailyVO>> yearly(@RequestParam(required = false) Integer year) {
+        return CommonResult.ok(sessionService.yearly(year));
+    }
+
+    /** 按任务聚合：时长、番茄数、记录条数，按时长倒序 */
+    @GetMapping("/by-task")
+    public CommonResult<List<TaskStatVO>> byTask(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer limit) {
+        return CommonResult.ok(sessionService.byTask(from, to, limit));
     }
 }

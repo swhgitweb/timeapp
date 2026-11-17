@@ -13,6 +13,7 @@ logs/
 # IDE
 .vscode/
 .idea/
+.trae/
 *.iml
 
 # 系统文件

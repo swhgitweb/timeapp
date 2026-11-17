@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.focus.mapper.SubscriptionMapper">
+  <resultMap id="SubscriptionMap" type="com.focus.entity.CalendarSubscription">
+    <id column="id" property="id"/><result column="user_id" property="userId"/>
+    <result column="last_modified" property="lastModified"/><result column="last_refreshed_at" property="lastRefreshedAt"/>
+    <result column="last_error" property="lastError"/>
+  </resultMap>
+  <select id="selectList" resultMap="SubscriptionMap">SELECT * FROM calendar_subscription WHERE user_id = #{userId} ORDER BY id</select>
+  <select id="selectById" resultMap="SubscriptionMap">SELECT * FROM calendar_subscription WHERE user_id = #{userId} AND id = #{id} LIMIT 1</select>
+  <select id="selectEnabledStale" resultMap="SubscriptionMap">
+    SELECT * FROM calendar_subscription WHERE enabled = 1 AND (last_refreshed_at IS NULL OR last_refreshed_at &lt; #{cutoff})
+    ORDER BY id LIMIT 50
+  </select>
+  <insert id="insert" parameterType="com.focus.entity.CalendarSubscription" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO calendar_subscription (user_id, url, name, color, enabled) VALUES (#{userId}, #{url}, #{name}, #{color}, #{enabled})
+  </insert>
+  <update id="update" parameterType="com.focus.entity.CalendarSubscription">
+    UPDATE calendar_subscription SET url = #{url}, name = #{name}, color = #{color}, enabled = #{enabled},
+      etag = #{etag}, last_modified = #{lastModified}, last_refreshed_at = #{lastRefreshedAt}
+    WHERE user_id = #{userId} AND id = #{id}
+  </update>
+  <delete id="delete">DELETE FROM calendar_subscription WHERE user_id = #{userId} AND id = #{id}</delete>
+  <update id="markSuccess">
+    UPDATE calendar_subscription SET etag = #{etag}, last_modified = #{lastModified},
+      last_refreshed_at = #{refreshedAt}, last_error = NULL WHERE user_id = #{userId} AND id = #{id}
+  </update>
+  <update id="markError">
+    UPDATE calendar_subscription SET last_error = #{error} WHERE user_id = #{userId} AND id = #{id}
+  </update>
+  <delete id="deleteEvents">DELETE FROM calendar_event WHERE user_id = #{userId} AND subscription_id = #{subscriptionId}</delete>
+  <insert id="insertIcs" parameterType="com.focus.entity.CalendarEvent">
+    INSERT INTO calendar_event
+      (user_id, kind, subscription_id, title, note, start_at, end_at, all_day, timezone, rrule, external_uid, recurrence_id)
+    VALUES
+      (#{userId}, 'ics', #{subscriptionId}, #{title}, #{note}, #{startAt}, #{endAt}, #{allDay}, #{timezone},
+       #{rrule}, #{externalUid}, #{recurrenceId})
+  </insert>
+</mapper>

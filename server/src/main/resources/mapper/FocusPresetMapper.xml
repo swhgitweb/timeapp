@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.focus.mapper.FocusPresetMapper">
+  <resultMap id="PresetMap" type="com.focus.entity.FocusPreset">
+    <id column="id" property="id"/><result column="user_id" property="userId"/>
+    <result column="planned_sec" property="plannedSec"/><result column="task_id" property="taskId"/>
+    <result column="habit_id" property="habitId"/><result column="note_template" property="noteTemplate"/>
+    <result column="sort_order" property="sortOrder"/>
+  </resultMap>
+  <select id="selectList" resultMap="PresetMap">SELECT * FROM focus_preset WHERE user_id = #{userId} ORDER BY sort_order, id</select>
+  <select id="selectById" resultMap="PresetMap">SELECT * FROM focus_preset WHERE user_id = #{userId} AND id = #{id} LIMIT 1</select>
+  <insert id="insert" parameterType="com.focus.entity.FocusPreset" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO focus_preset (user_id, name, mode, planned_sec, task_id, habit_id, note_template, sort_order)
+    VALUES (#{userId}, #{name}, #{mode}, #{plannedSec}, #{taskId}, #{habitId}, #{noteTemplate}, #{sortOrder})
+  </insert>
+  <update id="update" parameterType="com.focus.entity.FocusPreset">
+    UPDATE focus_preset SET name = #{name}, mode = #{mode}, planned_sec = #{plannedSec}, task_id = #{taskId},
+      habit_id = #{habitId}, note_template = #{noteTemplate}, sort_order = #{sortOrder}
+    WHERE user_id = #{userId} AND id = #{id}
+  </update>
+  <delete id="delete">DELETE FROM focus_preset WHERE user_id = #{userId} AND id = #{id}</delete>
+</mapper>

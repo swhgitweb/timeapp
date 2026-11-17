@@ -10,12 +10,20 @@ public class BizException extends RuntimeException {
         this.code = code;
     }
 
+    public static BizException unauthorized() {
+        return new BizException(CommonResult.CODE_UNAUTHORIZED, "请先登录");
+    }
+
     public static BizException badRequest(String message) {
         return new BizException(CommonResult.CODE_BAD_REQUEST, message);
     }
 
     public static BizException notFound(String message) {
         return new BizException(CommonResult.CODE_NOT_FOUND, message);
+    }
+
+    public static BizException conflict(String message) {
+        return new BizException(CommonResult.CODE_CONFLICT, message);
     }
 
     public int getCode() {

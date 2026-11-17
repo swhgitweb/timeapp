@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.focus.mapper.CalendarMapper">
+  <resultMap id="EventMap" type="com.focus.entity.CalendarEvent">
+    <id column="id" property="id"/>
+    <result column="user_id" property="userId"/>
+    <result column="task_id" property="taskId"/>
+    <result column="habit_id" property="habitId"/>
+    <result column="list_id" property="listId"/>
+    <result column="subscription_id" property="subscriptionId"/>
+    <result column="start_at" property="startAt"/>
+    <result column="end_at" property="endAt"/>
+    <result column="all_day" property="allDay"/>
+    <result column="display_color" property="displayColor"/>
+    <result column="external_uid" property="externalUid"/>
+    <result column="recurrence_id" property="recurrenceId"/>
+  </resultMap>
+
+  <sql id="JoinedColumns">
+    e.*, t.completed, COALESCE(e.color, l.color, h.color, s.color,
+      CASE e.kind WHEN 'anniversary' THEN '#e67e22' WHEN 'course' THEN '#1677a8' ELSE '#3b6ef6' END) AS display_color
+  </sql>
+  <sql id="JoinedTables">
+    FROM calendar_event e
+    LEFT JOIN task t ON t.id = e.task_id AND t.user_id = e.user_id AND t.deleted_at IS NULL
+    LEFT JOIN task_list l ON l.id = COALESCE(e.list_id, t.list_id) AND l.user_id = e.user_id
+    LEFT JOIN habit h ON h.id = e.habit_id AND h.user_id = e.user_id
+    LEFT JOIN calendar_subscription s ON s.id = e.subscription_id AND s.user_id = e.user_id
+  </sql>
+
+  <select id="selectById" resultMap="EventMap">
+    SELECT <include refid="JoinedColumns"/> <include refid="JoinedTables"/>
+    WHERE e.user_id = #{userId} AND e.id = #{id} AND e.deleted_at IS NULL LIMIT 1
+  </select>
+
+  <select id="selectRange" resultMap="EventMap">
+    SELECT <include refid="JoinedColumns"/> <include refid="JoinedTables"/>
+    WHERE e.user_id = #{userId} AND e.deleted_at IS NULL
+      AND (e.subscription_id IS NULL OR s.enabled = 1)
+      AND (e.kind &lt;&gt; 'task' OR t.id IS NOT NULL)
+      AND ((e.rrule IS NOT NULL AND e.start_at &lt; #{to})
+        OR (e.rrule IS NULL AND e.start_at &lt; #{to} AND e.end_at &gt; #{from}))
+      <if test="kinds != null and kinds.size() > 0">
+        AND e.kind IN <foreach collection="kinds" item="kind" open="(" separator="," close=")">#{kind}</foreach>
+      </if>
+      <if test="listIds != null and listIds.size() > 0">
+        AND COALESCE(e.list_id, t.list_id) IN
+        <foreach collection="listIds" item="listId" open="(" separator="," close=")">#{listId}</foreach>
+      </if>
+    ORDER BY e.start_at, e.id LIMIT 501
+  </select>
+
+  <select id="selectExport" resultMap="EventMap">
+    SELECT <include refid="JoinedColumns"/> <include refid="JoinedTables"/>
+    WHERE e.user_id = #{userId} AND e.deleted_at IS NULL AND e.subscription_id IS NULL
+      AND e.kind IN ('task', 'habit', 'anniversary', 'course') AND (e.kind &lt;&gt; 'task' OR t.id IS NOT NULL)
+    ORDER BY e.start_at, e.id
+  </select>
+
+  <insert id="insert" parameterType="com.focus.entity.CalendarEvent" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO calendar_event
+      (user_id, kind, task_id, habit_id, list_id, title, note, start_at, end_at,
+       all_day, timezone, rrule, color)
+    VALUES
+      (#{userId}, #{kind}, #{taskId}, #{habitId}, #{listId}, #{title}, #{note}, #{startAt}, #{endAt},
+       #{allDay}, #{timezone}, #{rrule}, #{color})
+  </insert>
+
+  <update id="update" parameterType="com.focus.entity.CalendarEvent">
+    UPDATE calendar_event SET kind = #{kind}, task_id = #{taskId}, habit_id = #{habitId}, list_id = #{listId},
+      title = #{title}, note = #{note}, start_at = #{startAt}, end_at = #{endAt}, all_day = #{allDay},
+      timezone = #{timezone}, rrule = #{rrule}, color = #{color}, version = version + 1
+    WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL AND version = #{version}
+  </update>
+
+  <update id="softDelete">
+    UPDATE calendar_event SET deleted_at = UTC_TIMESTAMP(6), version = version + 1
+    WHERE user_id = #{userId} AND id = #{id} AND deleted_at IS NULL
+      <if test="version != null">AND version = #{version}</if>
+  </update>
+</mapper>

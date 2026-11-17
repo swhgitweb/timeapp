@@ -1,0 +1,26 @@
+package com.focus.common;
+
+import com.focus.controller.AuthController;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+@Component
+public class AuthInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        HttpSession session = request.getSession(false);
+        Long userId = session == null ? null : (Long) session.getAttribute(AuthController.SESSION_USER);
+        if (userId == null) throw BizException.unauthorized();
+        AuthContext.setUserId(userId);
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        AuthContext.clear();
+    }
+}

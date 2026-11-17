@@ -19,6 +19,7 @@ http.interceptors.response.use(
     const body = resp.data
     if (body && typeof body === 'object' && 'code' in body) {
       if (body.code === 0) return body.data
+      if (body.code === 40100) window.dispatchEvent(new Event('auth:unauthorized'))
       throw new ApiError(body.message || '请求失败', body.code)
     }
     return body
@@ -27,6 +28,7 @@ http.interceptors.response.use(
     // 后端返回了统一响应体（如 40000 参数错误）时透出真实 message
     const body = err?.response?.data
     if (body && typeof body === 'object' && 'code' in body) {
+      if (body.code === 40100) window.dispatchEvent(new Event('auth:unauthorized'))
       throw new ApiError(body.message || '请求失败', body.code)
     }
     // 网络层错误（后端未启动、超时等）
