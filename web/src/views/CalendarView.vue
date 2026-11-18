@@ -12,7 +12,6 @@ import CalendarYearView from '../components/calendar/CalendarYearView.vue'
 import SubscriptionManager from '../components/calendar/SubscriptionManager.vue'
 import {
   CALENDAR_KIND_LABELS,
-  COMMON_TIMEZONES,
   type CalendarEvent,
   type CalendarKind,
   type CalendarView,
@@ -41,8 +40,6 @@ const views: { value: CalendarView; label: string }[] = [
 ]
 const kindOptions = (['task', 'habit', 'anniversary', 'course', 'ics'] as CalendarKind[])
   .map((value) => ({ value, label: CALENDAR_KIND_LABELS[value] }))
-const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
-const timezoneOptions = computed(() => [...new Set([store.settings.auxiliaryTimezone, localTimezone, ...COMMON_TIMEZONES].filter(Boolean))])
 const activeLists = computed(() => store.lists.filter((list) => !list.archived))
 
 const periodTitle = computed(() => {
@@ -147,11 +144,6 @@ function onBooleanSetting(key: 'showFocus' | 'showLunar' | 'showHolidays', event
 function onWeekStart(event: Event) {
   const weekStart = Number((event.target as HTMLSelectElement).value) as 0 | 1
   void store.saveSettings({ weekStart }, true)
-}
-
-function onAuxiliaryTimezone(event: Event) {
-  const auxiliaryTimezone = (event.target as HTMLSelectElement).value
-  void store.saveSettings({ auxiliaryTimezone })
 }
 
 async function runBatch(action: 'complete' | 'move-list' | 'reschedule') {
@@ -274,7 +266,6 @@ onMounted(() => { void store.bootstrap() })
       </div>
       <div class="setting-group compact-settings">
         <label>每周起始日<select class="input" :value="store.settings.weekStart" :disabled="store.settingsSaving" @change="onWeekStart"><option :value="1">周一</option><option :value="0">周日</option></select></label>
-        <label>辅助时区<select class="input" :value="store.settings.auxiliaryTimezone" :disabled="store.settingsSaving" @change="onAuxiliaryTimezone"><option value="">不显示</option><option v-for="zone in timezoneOptions" :key="zone" :value="zone">{{ zone.replaceAll('_', ' ') }}</option></select></label>
       </div>
       <span v-if="store.settingsSaving" class="muted saving-text">正在保存设置…</span>
     </section>
@@ -310,7 +301,7 @@ onMounted(() => { void store.bootstrap() })
         <CalendarMonthView :start-date="store.range.start.format('YYYY-MM-DD')" :days="42" :reference-date="store.anchor" :week-start="store.settings.weekStart" :events="store.events" :day-info="store.dayInfo" :show-lunar="store.settings.showLunar" :show-holidays="store.settings.showHolidays" :selection-mode="store.selectionMode" :selected-ids="store.selectedIds" @open="openEvent" @select="store.toggleSelection" @create="createEvent" />
       </section>
       <section v-else-if="store.view === 'week' || store.view === 'multi-day'" class="calendar-panel time-panel">
-        <CalendarTimeGrid :key="`${store.view}-${store.range.start.format('YYYY-MM-DD')}`" :start-date="store.range.start.format('YYYY-MM-DD')" :days="store.view === 'week' ? 7 : 3" :events="store.events" :auxiliary-timezone="store.settings.auxiliaryTimezone" :selection-mode="store.selectionMode" :selected-ids="store.selectedIds" @open="openEvent" @select="store.toggleSelection" @create="createEvent" />
+        <CalendarTimeGrid :key="`${store.view}-${store.range.start.format('YYYY-MM-DD')}`" :start-date="store.range.start.format('YYYY-MM-DD')" :days="store.view === 'week' ? 7 : 3" :events="store.events" :selection-mode="store.selectionMode" :selected-ids="store.selectedIds" @open="openEvent" @select="store.toggleSelection" @create="createEvent" />
       </section>
       <section v-else-if="store.view === 'multi-week'" class="calendar-panel month-panel">
         <CalendarMonthView :start-date="store.range.start.format('YYYY-MM-DD')" :days="14" :reference-date="store.anchor" :week-start="store.settings.weekStart" :events="store.events" :day-info="store.dayInfo" :show-lunar="store.settings.showLunar" :show-holidays="store.settings.showHolidays" compact :selection-mode="store.selectionMode" :selected-ids="store.selectedIds" @open="openEvent" @select="store.toggleSelection" @create="createEvent" />

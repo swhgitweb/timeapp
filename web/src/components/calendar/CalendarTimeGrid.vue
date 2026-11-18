@@ -22,7 +22,6 @@ const props = defineProps<{
   startDate: string
   days: number
   events: CalendarEvent[]
-  auxiliaryTimezone: string
   selectionMode: boolean
   selectedIds: string[]
 }>()
@@ -96,12 +95,6 @@ function allDayEvents(date: string): CalendarEvent[] {
   return props.events.filter((event) => event.allDay && dayjs(event.startAt).isBefore(end) && dayjs(event.endAt).isAfter(start))
 }
 
-function auxiliaryTime(hour: number): string {
-  if (!props.auxiliaryTimezone) return ''
-  const local = dayjs(props.startDate).hour(hour).minute(0).second(0)
-  return dayjs.tz(local, props.auxiliaryTimezone).format('MM-DD HH:mm')
-}
-
 function isSelected(event: CalendarEvent): boolean {
   return props.selectedIds.includes(calendarEventKey(event))
 }
@@ -127,10 +120,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="time-scroll">
     <div class="time-head" :style="gridStyle">
-      <div class="axis-head">
-        <span>本地</span>
-        <small v-if="auxiliaryTimezone">{{ auxiliaryTimezone.replaceAll('_', ' ') }}</small>
-      </div>
+      <div class="axis-head"></div>
       <div v-for="column in columns" :key="column.date" class="day-head" :class="{ today: isToday(column.date) }">
         <span>{{ column.weekday }}</span>
         <button title="新增当天日程" @click="emit('create', column.date)">{{ column.month }}{{ column.day }}日</button>
@@ -158,7 +148,6 @@ onBeforeUnmount(() => {
         <div class="time-axis">
           <div v-for="hour in hours" :key="hour" class="axis-label" :style="{ top: `${hour * HOUR_HEIGHT}px` }">
             <span>{{ String(hour).padStart(2, '0') }}:00</span>
-            <small v-if="auxiliaryTimezone">{{ auxiliaryTime(hour) }}</small>
           </div>
         </div>
         <div v-for="column in columns" :key="column.date" class="time-column">
@@ -186,8 +175,7 @@ onBeforeUnmount(() => {
 .time-scroll { overflow-x: auto; }
 .time-head, .all-day-row, .time-grid { display: grid; }
 .time-head { border-bottom: 1px solid var(--line); }
-.axis-head { position: sticky; left: 0; z-index: 5; display: flex; flex-direction: column; justify-content: center; padding: 5px 8px; background: #fff; color: var(--muted); font-size: 11px; }
-.axis-head small { max-width: 66px; overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.axis-head { position: sticky; left: 0; z-index: 5; background: #fff; }
 .day-head { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 52px; color: var(--muted); font-size: 11px; }
 .day-head button { border: 0; border-radius: 999px; background: transparent; color: var(--ink); padding: 4px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .day-head button:hover { background: var(--accent-soft); color: var(--accent); }
@@ -204,7 +192,6 @@ onBeforeUnmount(() => {
 .time-grid { position: relative; }
 .time-axis { position: relative; background: #fff; }
 .axis-label { position: absolute; left: 0; right: 5px; display: flex; flex-direction: column; align-items: flex-end; height: 52px; padding-top: 3px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
-.axis-label small { font-size: 8px; }
 .time-column { position: relative; border-left: 1px solid var(--line); background-image: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px 52px); }
 .time-block { --event-color: #4772fa; position: absolute; left: 3px; right: 3px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; overflow: hidden; padding: 4px 6px; border: 0; border-left: 3px solid var(--event-color); border-radius: 5px; background: color-mix(in srgb, var(--event-color) 14%, #fff); color: var(--ink); font: inherit; font-size: 11px; line-height: 1.3; text-align: left; cursor: pointer; }
 .time-block:hover { z-index: 4; background: color-mix(in srgb, var(--event-color) 24%, #fff); }
