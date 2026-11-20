@@ -90,7 +90,7 @@ public class SessionServiceImpl implements SessionService {
         if (current == null) throw BizException.notFound("记录不存在");
         int pausedSec = req.getPausedSec() == null ? 0 : req.getPausedSec();
         long durationSec = validateTimes(req.getStartedAt(), req.getEndedAt(), req.getDurationSec(), pausedSec);
-        current.setTaskTitle(resolveTitle(req.getTaskId(), req.getHabitId(), null, current.getTaskTitle()));
+        current.setTaskTitle(resolveTitle(req.getTaskId(), req.getHabitId(), req.getTaskTitle(), current.getTaskTitle()));
         current.setTaskId(req.getTaskId());
         current.setHabitId(req.getHabitId());
         current.setNote(req.getNote() == null ? "" : req.getNote().trim());

@@ -32,6 +32,7 @@ export interface SessionVO extends SessionCreatePayload {
 export interface SessionUpdatePayload {
   taskId: number | null
   habitId: number | null
+  taskTitle?: string
   note: string
   startedAt: string
   endedAt: string

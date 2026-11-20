@@ -9,6 +9,7 @@ import java.time.Instant;
 public class SessionUpdateReq {
     private Long taskId;
     private Long habitId;
+    @Size(max = 100) private String taskTitle;
     @Size(max = 2000) private String note;
     @NotNull private Instant startedAt;
     @NotNull private Instant endedAt;
@@ -20,6 +21,8 @@ public class SessionUpdateReq {
     public void setTaskId(Long taskId) { this.taskId = taskId; }
     public Long getHabitId() { return habitId; }
     public void setHabitId(Long habitId) { this.habitId = habitId; }
+    public String getTaskTitle() { return taskTitle; }
+    public void setTaskTitle(String taskTitle) { this.taskTitle = taskTitle; }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
     public Instant getStartedAt() { return startedAt; }

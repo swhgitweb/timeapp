@@ -518,6 +518,16 @@ function onManualSaved() {
               </select>
             </label>
             <label class="field">
+              <span>专注事情</span>
+              <input
+                v-model="timer.taskTitle"
+                type="text"
+                maxlength="100"
+                :disabled="timer.phase !== 'idle' || timer.taskId != null || timer.habitId != null"
+                :placeholder="timer.taskId != null || timer.habitId != null ? '已关联，标题随关联项' : '不关联时，直接填写这次专注在做什么'"
+              />
+            </label>
+            <label class="field note-full">
               <span>专注笔记</span>
               <textarea
                 v-model="timer.note"
@@ -902,6 +912,16 @@ function onManualSaved() {
   gap: 12px;
   width: 100%;
   max-width: 660px;
+}
+
+.focus-fields .note-full {
+  grid-column: 1 / -1;
+}
+
+.focus-fields input:disabled {
+  background: var(--bg-soft, #f7f8fa);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .focus-aside {
