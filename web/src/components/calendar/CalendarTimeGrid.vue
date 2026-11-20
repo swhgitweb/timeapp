@@ -68,10 +68,12 @@ const blocksByDay = computed(() => {
       const visibleEnd = end.isAfter(dayEnd) ? dayEnd : end
       const top = visibleStart.diff(dayStart, 'minute') / 60 * HOUR_HEIGHT
       const height = Math.max(20, visibleEnd.diff(visibleStart, 'minute') / 60 * HOUR_HEIGHT)
+      const startLabel = start.isBefore(dayStart) ? '00:00' : start.format('HH:mm')
+      const endLabel = end.isAfter(dayEnd) ? '24:00' : end.format('HH:mm')
       blocks.push({
         event,
         continued: start.isBefore(dayStart),
-        time: start.isBefore(dayStart) ? '00:00' : start.format('HH:mm'),
+        time: `${startLabel} - ${endLabel}`,
         style: {
           top: `${top}px`,
           height: `${height}px`,
